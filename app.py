@@ -6,15 +6,14 @@ import seaborn as sb
 
 st.title("Zomato Location-wise Cost Analysis")
 
-# Assuming df is already loaded earlier in your script
-# If not, load it like:
+# Load dataset
 df = pd.read_csv("Zomato_Live.csv")
 
-# Show available locations
-st.write(df.location.unique())
+# Get unique locations sorted
+locations = sorted(df.location.dropna().unique())
 
-# Streamlit input instead of Python input()
-l = st.text_input("Enter Location Name:")
+# Dropdown for location selection
+l = st.selectbox("Select Location:", locations)
 
 if l:
     lo = df[df.location == l]
@@ -27,9 +26,14 @@ if l:
                 .nlargest(15, 'rate')
                 .reset_index())
 
-        plt.figure(figsize=(20, 8))
+        st.subheader(f"Top 15 Restaurants in {l} by Rating")
+
+        fig, ax = plt.subplots(figsize=(20, 8))
+        sb.barplot(x=gr.name, y=gr.approx_cost, palette='winter', ax=ax)
         plt.xticks(rotation=90)
-        sb.barplot(x=gr.name, y=gr.approx_cost, palette='winter')
 
-        st.pyplot(plt)
+        st.pyplot(fig)
 
+        # Optional: show table
+        with st.expander("Show Data Table"):
+            st.dataframe(gr)
