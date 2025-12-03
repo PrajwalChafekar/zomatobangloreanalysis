@@ -8,7 +8,7 @@ st.title("Zomato Location-wise Cost Analysis")
 
 # Assuming df is already loaded earlier in your script
 # If not, load it like:
-# df = pd.read_csv("Zomato_Live.csv")
+df = pd.read_csv("Zomato_Live.csv")
 
 # Show available locations
 st.write(df.location.unique())
