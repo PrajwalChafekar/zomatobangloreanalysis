@@ -9,7 +9,7 @@ st.set_page_config(page_title="Zomato Analysis", layout="wide")
 st.title("🍽️ Zomato Restaurant Analysis Dashboard")
 
 # Load Data
-df = pd.read_csv("../Datasets/zomato.csv")
+df = pd.read_csv("Zomato_Live.csv")
 
 # Drop unnecessary columns
 df = df.drop(['url','address','phone','dish_liked','menu_item','reviews_list',
