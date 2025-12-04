@@ -1,79 +1,123 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 import seaborn as sb
 
-st.set_page_config(page_title="Zomato Analysis", layout="wide")
+# ----------------------------- PAGE CONFIG ------------------------------------
+st.set_page_config(
+    page_title="Zomato Explorer",
+    page_icon="🍽️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("🍽️ Zomato Location-wise Cost Analysis")
+# ----------------------------- PAGE HEADER ------------------------------------
+st.markdown(
+    """
+    <h1 style='text-align:center; color:#FF6347;'>🍽️ Zomato Location-wise Restaurant Analysis</h1>
+    <p style='text-align:center; font-size:18px;'>
+        Explore restaurant ratings, costs, and votes with interactive charts & colorful UI.
+    </p>
+    <hr>
+    """,
+    unsafe_allow_html=True,
+)
 
-# Load dataset
+# ----------------------------- LOAD DATA --------------------------------------
 df = pd.read_csv("Zomato_Live.csv")
 
-# Unique locations
+# Dropdown list
 locations = sorted(df["location"].dropna().unique())
 
-# Sidebar controls
-st.sidebar.header("⚙️ Controls")
+# ----------------------------- SIDEBAR UI -------------------------------------
+st.sidebar.header("🔍 Filters & Options")
 
-# Dropdown for location
-l = st.sidebar.selectbox("Select Location:", locations)
+selected_location = st.sidebar.selectbox("Select Location", locations, help="Choose a location to explore")
 
-# Choose palette
-palette_choice = st.sidebar.selectbox(
-    "Color Theme:",
-    ["viridis", "magma", "coolwarm", "winter", "plasma", "cubehelix"]
+chart_type = st.sidebar.radio(
+    "Choose Chart Type",
+    ["Bar Chart", "Line Chart", "Scatter Plot"],
+    help="Switch between chart styles"
 )
 
-# Sorting choice
-sort_by = st.sidebar.radio(
-    "Sort Restaurants By:",
-    ["rate", "approx_cost", "votes"]
+color_scheme = st.sidebar.color_picker("Choose Bar Color", "#1f77b4")
+
+min_votes = st.sidebar.slider(
+    "Minimum Votes", 
+    int(df.votes.min()), 
+    int(df.votes.max()), 
+    0
 )
 
-# Number of restaurants to display
-top_n = st.sidebar.slider("Number of Restaurants:", 5, 25, 15)
-
-# Checkbox for showing raw filtered data
-show_raw = st.sidebar.checkbox("Show Raw Data", False)
-
-
-# Main content
-if l:
-    lo = df[df["location"] == l]
+# ----------------------------- FILTER DATA ------------------------------------
+if selected_location:
+    lo = df[df["location"] == selected_location]
+    lo = lo[lo["votes"] >= min_votes]
 
     if lo.empty:
-        st.warning("No data found for this location.")
+        st.warning("No data found for this location based on filters.")
     else:
-        st.success(f"Showing results for **{l}**")
-
-        # Grouping
         gr = (
             lo.groupby("name")[["rate", "approx_cost", "votes"]]
             .mean()
-            .nlargest(top_n, sort_by)
+            .sort_values(by="rate", ascending=False)
+            .head(15)
             .reset_index()
         )
 
-        # Optional raw table
-        if show_raw:
-            with st.expander("📄 Raw Filtered Data"):
-                st.dataframe(lo)
+        # ----------------------------- METRIC CARDS ------------------------------------
+        col1, col2, col3 = st.columns(3)
 
-        st.subheader(f"Top {top_n} Restaurants in {l} — Sorted by {sort_by.title()}")
+        with col1:
+            st.metric("⭐ Avg Rating", round(gr["rate"].mean(), 2))
+        with col2:
+            st.metric("💰 Avg Cost", int(gr["approx_cost"].mean()))
+        with col3:
+            st.metric("🗳️ Avg Votes", int(gr["votes"].mean()))
 
-        # Plot
-        fig, ax = plt.subplots(figsize=(20, 8))
-        sb.barplot(x=gr["name"], y=gr["approx_cost"], palette=palette_choice, ax=ax)
+        st.markdown(f"### 🎯 Top 15 Restaurants in **{selected_location}**")
 
-        ax.set_title(f"Average Cost for Two — {l}", fontsize=18, weight="bold")
-        ax.set_xlabel("Restaurant Name", fontsize=14)
-        ax.set_ylabel("Approx Cost", fontsize=14)
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90)
+        # ----------------------------- PLOTLY CHARTS ------------------------------------
+        if chart_type == "Bar Chart":
+            fig = px.bar(
+                gr,
+                x="name",
+                y="approx_cost",
+                color="rate",
+                color_continuous_scale="Teal_r",
+                title=f"Cost for Two People in {selected_location}",
+                height=550
+            )
+        elif chart_type == "Line Chart":
+            fig = px.line(
+                gr,
+                x="name",
+                y="approx_cost",
+                markers=True,
+                title=f"Cost Trend for Restaurants in {selected_location}",
+                height=550
+            )
+            fig.update_traces(line_color=color_scheme)
+        else:
+            fig = px.scatter(
+                gr,
+                x="rate",
+                y="approx_cost",
+                size="votes",
+                hover_name="name",
+                color="rate",
+                title=f"Rate vs Cost Scatter - {selected_location}",
+                color_continuous_scale="thermal",
+                height=550
+            )
 
-        st.pyplot(fig)
+        fig.update_layout(xaxis_title="Restaurant Name", yaxis_title="Approx Cost")
 
-        # Table expander
-        with st.expander("📊 View Processed Table"):
-            st.dataframe(gr)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # ----------------------------- DATA TABLE ------------------------------------
+        with st.expander("📄 Show Full Restaurant Table"):
+            st.dataframe(gr.style.highlight_max(axis=0, color="lightgreen"))
+
+
