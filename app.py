@@ -1,99 +1,128 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sb
+import plotly.express as px
+import plotly.graph_objects as go
 
-# --- PAGE CONFIG ---
+# ------------------ PAGE CONFIG ------------------
 st.set_page_config(
-    page_title="Zomato Analysis",
+    page_title="Zomato Cost Analysis",
     page_icon="🍽️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- TITLE SECTION ---
-st.markdown(
-    """
-    <h1 style='text-align:center; color:#FF4B4B;'>🍽️ Zomato Location-wise Cost Analysis</h1>
-    <p style='text-align:center; font-size:18px; color:#555;'>Explore restaurants, ratings, votes & average cost</p>
-    """,
-    unsafe_allow_html=True
-)
+# ------------------ CUSTOM CSS FOR UI ------------------
+st.markdown("""
+<style>
+/* Smooth hover animation for select boxes */
+.stSelectbox div[data-baseweb="select"] {
+    transition: 0.3s;
+}
+.stSelectbox div[data-baseweb="select"]:hover {
+    transform: scale(1.02);
+}
 
-# Load dataset
+/* Card-like container */
+.custom-box {
+    background: #ffffffAA;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0px 3px 10px rgba(0,0,0,0.15);
+    margin-bottom: 25px;
+}
+
+/* Gradient title */
+h1 {
+    background: -webkit-linear-gradient(45deg, #ff4b1f, #1fddff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ------------------ TITLE ------------------
+st.title("🍽️ Zomato Location-Wise Cost Analysis")
+
+# ------------------ LOAD DATA ------------------
 df = pd.read_csv("Zomato_Live.csv")
 
-# --- SIDEBAR SETTINGS ---
-st.sidebar.header("⚙️ Controls")
+# ------------------ SIDEBAR ------------------
+with st.sidebar:
+    st.header("⚙️ Controls")
 
-# Dropdown – Select location
+    # Top restaurant limit slider
+    top_n = st.slider("Select number of top restaurants:", 5, 30, 15)
+
+    # Color palette selection
+    color_theme = st.selectbox(
+        "Choose Color Theme:",
+        ["Viridis", "Cividis", "Plasma", "Inferno", "Turbo", "Teal", "Aggrnyl"]
+    )
+
+    st.markdown("### 🎨 Selected Theme:")
+    st.color_picker("Preview (does not change plot)", "#00aaff")
+
+# ------------------ LOCATION SELECT ------------------
 locations = sorted(df["location"].dropna().unique())
-selected_location = st.sidebar.selectbox("📍 Choose Location:", locations)
 
-# Dropdown – Select color palette
-color_palettes = [
-    "viridis", "plasma", "inferno", "magma", "cividis",
-    "coolwarm", "winter", "spring", "summer", "autumn",
-    "Blues", "Greens", "Reds", "Purples"
-]
+st.subheader("📍 Choose a Location")
+l = st.selectbox("Select Location:", locations, key="location_select")
 
-selected_palette = st.sidebar.selectbox("🎨 Select Color Palette", color_palettes)
-
-# Slider – Grading (brightness / saturation effect)
-grading_factor = st.sidebar.slider("🌈 Color Grading Strength", 0.5, 2.0, 1.0)
-
-
-# --- MAIN LOGIC ---
-if selected_location:
-
-    lo = df[df["location"] == selected_location]
+if l:
+    lo = df[df["location"] == l]
 
     if lo.empty:
-        st.warning("No data found for this location.")
+        st.warning("⚠️ No data found for this location.")
     else:
-
-        # Grouping
+        # ------------------ GROUPING ------------------
         gr = (
             lo.groupby("name")[["rate", "approx_cost", "votes"]]
             .mean()
-            .nlargest(15, "rate")
+            .nlargest(top_n, "rate")
             .reset_index()
         )
 
-        # --- METRIC CARDS ROW ---
-        col1, col2, col3 = st.columns(3)
+        st.markdown(f"### ⭐ Top **{top_n} Restaurants** in **{l}** by Rating")
 
-        col1.metric("⭐ Avg Rating", f"{gr['rate'].mean():.2f}")
-        col2.metric("💰 Avg Cost For Two", f"₹{int(gr['approx_cost'].mean())}")
-        col3.metric("👍 Avg Votes", f"{int(gr['votes'].mean())}")
-
-        st.markdown(
-            f"<h2 style='color:#FF4B4B;'>🏆 Top 15 Restaurants in {selected_location}</h2>",
-            unsafe_allow_html=True
+        # ------------------ ANIMATED INTERACTIVE BAR CHART ------------------
+        fig = px.bar(
+            gr,
+            x="name",
+            y="approx_cost",
+            color="approx_cost",
+            color_continuous_scale=color_theme.lower(),
+            title=f"Cost Comparison of Top {top_n} Restaurants in {l}",
+            animation_frame="rate",
+            labels={"approx_cost": "Approx Cost (₹)", "name": "Restaurant"},
         )
 
-        # --- PLOT ---
-        fig, ax = plt.subplots(figsize=(20, 8))
+        fig.update_layout(
+            xaxis_tickangle=90,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(size=14),
+            transition_duration=600
+        )
 
-        # Apply palette and grading
-        palette = sb.color_palette(selected_palette)
-        palette = [(r * grading_factor, g * grading_factor, b * grading_factor) for r, g, b in palette]
+        st.plotly_chart(fig, use_container_width=True)
 
-        sb.barplot(x=gr["name"], y=gr["approx_cost"], palette=palette, ax=ax)
+        # ------------------ DATA TABLE ------------------
+        with st.expander("📊 Show Data Table"):
+            st.dataframe(gr.style.highlight_max("rate", color="lightgreen"))
 
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=90, fontsize=10)
-        ax.set_ylabel("Approx Cost (₹)", fontsize=14)
-        ax.set_xlabel("Restaurant Name", fontsize=14)
-        ax.set_title(f"Cost Comparison in {selected_location}", fontsize=18)
-
-        st.pyplot(fig)
-
-        # --- DATA TABLE ---
-        with st.expander("📊 Show Table Data"):
-            st.dataframe(gr.style.background_gradient(cmap="Oranges"))
-
-        # --- RAW DATA ---
-        with st.expander("📂 View Raw Filtered Dataset"):
-            st.dataframe(lo)
+        # ------------------ EXTRA ANIMATED LINE CHART ------------------
+        st.markdown("### 📈 Votes vs Rating Trend (Animated)")
+        fig2 = px.scatter(
+            gr,
+            x="rate",
+            y="votes",
+            size="approx_cost",
+            color="rate",
+            color_continuous_scale=color_theme.lower(),
+            animation_frame="name",
+            title="Votes vs Rating (Bubble Animation)"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
